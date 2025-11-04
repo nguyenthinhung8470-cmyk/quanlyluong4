@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quản Lý Nhân Sự & Chấm Công</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: 'Segoe UI', sans-serif;
+      display: flex; background: #f5f6fa; overflow-x: hidden;
+    }
+    .sidebar {
+      width: 240px; background: linear-gradient(180deg, #2f3640, #353b48);
+      color: #fff; height: 100vh; transition: width 0.4s ease;
+      position: fixed; overflow: hidden; box-shadow: 2px 0 10px rgba(0,0,0,0.2);
+    }
+    .sidebar.closed { width: 70px; }
+    .sidebar h2 {
+      text-align: center; padding: 20px 10px; font-size: 20px;
+      background: #273c75; margin: 0; letter-spacing: 1px;
+      transition: opacity 0.3s;
+    }
+    .sidebar.closed h2 { opacity: 0; }
+    .sidebar ul {
+      list-style: none; padding: 0; margin: 0;
+    }
+    .sidebar li {
+      padding: 14px 20px; cursor: pointer;
+      border-left: 5px solid transparent;
+      display: flex; align-items: center;
+      gap: 12px; transition: all 0.3s;
+      white-space: nowrap;
+    }
+    .sidebar li:hover, .sidebar li.active {
+      background: #40739e; border-left: 5px solid #00a8ff;
+    }
+    .sidebar li i {
+      font-size: 18px; width: 25px; text-align: center;
+      transition: transform 0.3s;
+    }
+    .sidebar.closed li span {
+      opacity: 0; transform: translateX(-10px);
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .sidebar li span {
+      opacity: 1; transition: opacity 0.3s, transform 0.3s;
+    }
+    .toggle-btn {
+      position: fixed; left: 255px; top: 12px;
+      background: #00a8ff; color: white;
+      border: none; font-size: 22px;
+      cursor: pointer; border-radius: 6px;
+      padding: 7px 12px; transition: left 0.4s ease, background 0.3s;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    .toggle-btn:hover { background: #0097e6; }
+    .sidebar.closed ~ .toggle-btn { left: 85px; }
+    .content {
+      flex: 1; margin-left: 240px; padding: 25px;
+      transition: margin-left 0.4s ease;
+    }
+    .sidebar.closed ~ .content { margin-left: 70px; }
+    h2 { color: #273c75; margin-bottom: 10px; }
+    input, select, button {
+      margin: 5px; padding: 6px; font-size: 15px;
+      border-radius: 4px; border: 1px solid #ccc;
+    }
+    button {
+      background: #00a8ff; color: white; border: none;
+      cursor: pointer; transition: background 0.3s;
+    }
+    button:hover { background: #0097e6; }
+    .delete-btn {
+      background: #c0392b;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .delete-btn:hover { background: #a93226; }
+    table {
+      width: 100%; border-collapse: collapse;
+      background: white; margin-top: 10px; border-radius: 6px; overflow: hidden;
+    }
+    th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+    th { background-color: #00a8ff; color: white; }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    .sidebar.open li { animation: slideIn 0.4s ease; }
+  </style>
+</head>
+<body>
+  <div class="sidebar" id="sidebar">
+    <h2>MENU</h2>
+    <ul>
+      <li onclick="showPage('dashboard')" id="menu-dashboard"><i class="fas fa-home"></i><span>Trang chủ</span></li>
+      <li onclick="showPage('nhansu')" id="menu-nhansu"><i class="fas fa-users"></i><span>Nhân sự</span></li>
+      <li onclick="showPage('chamcong')" id="menu-chamcong"><i class="fas fa-clock"></i><span>Chấm công</span></li>
+      <li onclick="showPage('bangluong')" id="menu-bangluong"><i class="fas fa-money-bill-wave"></i><span>Bảng lương</span></li>
+      <li onclick="showPage('settings')" id="menu-settings"><i class="fas fa-cog"></i><span>Cài đặt</span></li>
+    </ul>
+  </div>
+  <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+  <div class="content" id="content"></div>
+  <script>
+    let sidebar = document.getElementById('sidebar');
+    let content = document.getElementById('content');
+    let lang = localStorage.getItem("lang") || "vi";
+    let nhanVienList = JSON.parse(localStorage.getItem("nhanVienList")) || [];
+    let chamCongList = JSON.parse(localStorage.getItem("chamCongList")) || [];
+    let phuCapList = JSON.parse(localStorage.getItem("phuCapList")) || [];
+    let deletedNhanVienList = JSON.parse(localStorage.getItem("deletedNhanVienList")) || [];
+
+    const translations = {
+      vi: {
+        dashboard: "Trang chủ",
+        nhansu: "Nhân sự",
+        chamcong: "Chấm công",
+        bangluong: "Bảng lương",
+        settings: "Cài đặt",
+        addEmployee: "Thêm nhân viên",
+        name: "Họ và tên",
+        position: "Chức vụ",
+        salary: "Lương cơ bản",
+        save: "Lưu",
+        attendanceList: "Danh sách chấm công",
+        date: "Ngày",
+        checkin: "Giờ vào",
+        checkout: "Giờ ra",
+        overtime: "Giờ OT",
+        type: "Loại công",
+        note: "Ghi chú",
+        enterInfo: "Vui lòng nhập đầy đủ thông tin",
+        menuSettings: "Cài đặt ngôn ngữ",
+        settingsText: "Chọn ngôn ngữ hiển thị",
+        deleted: "Đã xóa",
+        delete: "Xóa",
+        restore: "Khôi phục",
+        showDeleted: "Xem nhân viên đã xóa",
+        hideDeleted: "Ẩn nhân viên đã xóa",
+        noDeleted: "Không có nhân viên nào đã xóa.",
+        action: "Thao tác",
+      },
+      en: {
+        dashboard: "Dashboard",
+        nhansu: "Employees",
+        chamcong: "Attendance",
+        bangluong: "Payroll",
+        settings: "Settings",
+        addEmployee: "Add Employee",
+        name: "Full Name",
+        position: "Position",
+        salary: "Base Salary",
+        save: "Save",
+        attendanceList: "Attendance List",
+        date: "Date",
+        checkin: "Check In",
+        checkout: "Check Out",
+        overtime: "Overtime Hours",
+        type: "Work Type",
+        note: "Note",
+        enterInfo: "Please fill in all fields",
+        menuSettings: "Language Settings",
+        settingsText: "Select display language",
+        deleted: "Deleted",
+        delete: "Delete",
+        restore: "Restore",
+        showDeleted: "Show deleted employees",
+        hideDeleted: "Hide deleted employees",
+        noDeleted: "No deleted employees.",
+        action: "Action",
+      }
+    };
+
+    function toggleSidebar() { sidebar.classList.toggle('closed'); }
+
+    function showPage(page) {
+      document.querySelectorAll('.sidebar li').forEach(li => li.classList.remove('active'));
+      document.getElementById(`menu-${page}`).classList.add('active');
+      const t = translations[lang];
+
+      if (page === 'dashboard') {
+        content.innerHTML = `<h2>${t.dashboard}</h2><p>Chào mừng bạn đến hệ thống quản lý nhân sự!</p>`;
+      }
+
+      if(typeof window.showDeletedNhanVien === "undefined") window.showDeletedNhanVien = false;
+
+      if (page === 'nhansu') {
+        let tableNhanSu = `
+          <h2>${t.nhansu}</h2>
+          <input id="tenNV" placeholder="${t.name}">
+          <input id="chucVu" placeholder="${t.position}">
+          <input id="luong" type="number" placeholder="${t.salary}">
+          <button onclick="themNhanVien()">${t.save}</button>
+          <button onclick="toggleShowDeletedNhanVien()">${window.showDeletedNhanVien ? t.hideDeleted : t.showDeleted}</button>
+          <table>
+            <tr><th>${t.name}</th><th>${t.position}</th><th>${t.salary}</th><th>${t.action}</th></tr>
+            ${nhanVienList.map((nv,i)=>`
+              <tr>
+                <td>${nv.ten}</td>
+                <td>${nv.chucVu}</td>
+                <td>${nv.luongCoBan}</td>
+                <td><button class="delete-btn" onclick="xoaNhanVien(${i})">${t.delete}</button></td>
+              </tr>
+            `).join('')}
+          </table>
+        `;
+        let deletedSection = "";
+        if(window.showDeletedNhanVien) {
+          deletedSection = `<div class="deleted-section">
+              <b>${t.deleted}:</b>
+              <table>
+                <tr>
+                  <th>${t.name}</th>
+                  <th>${t.position}</th>
+                  <th>${t.salary}</th>
+                  <th>${t.action}</th>
+                </tr>
+                ${
+                  deletedNhanVienList.length
+                  ? deletedNhanVienList.map((nv,i)=>`
+                    <tr>
+                      <td>${nv.ten}</td>
+                      <td>${nv.chucVu}</td>
+                      <td>${nv.luongCoBan}</td>
+                      <td>
+                        <button class="restore-btn" onclick="khoiPhucNhanVien(${i})">${t.restore}</button>
+                      </td>
+                    </tr>
+                  `).join('')
+                  : `<tr><td colspan="4">${t.noDeleted}</td></tr>`
+                }
+              </table>
+          </div>`;
+        }
+        content.innerHTML = tableNhanSu + deletedSection;
+      }
+
+      if (page === 'chamcong') {
+        content.innerHTML = `
+          <h2>${t.chamcong}</h2>
+          <select id="tenNVCC">
+            <option value="">-- Chọn nhân viên --</option>
+            ${nhanVienList.map(nv=>`<option value="${nv.ten}">${nv.ten}</option>`).join('')}
+          </select>
+          <input id="ngay" type="date">
+          <input id="gioVao" type="time">
+          <input id="gioRa" type="time">
+          <input id="gioOT" type="number" placeholder="${t.overtime}">
+          <select id="loaiCong">
+            <option value="Bình thường">Bình thường</option>
+            <option value="Lễ">Ngày lễ</option>
+            <option value="Nghỉ phép">Nghỉ phép</option>
+          </select>
+          <input id="ghiChu" placeholder="${t.note}">
+          <button onclick="luuChamCong()">${t.save}</button>
+          <h3>${t.attendanceList}</h3>
+          <table><tr>
+            <th>${t.name}</th><th>${t.date}</th><th>${t.checkin}</th><th>${t.checkout}</th>
+            <th>${t.overtime}</th><th>${t.type}</th><th>${t.note}</th><th>${t.action}</th>
+          </tr>
+          ${
+            chamCongList.map((c,idx)=>`
+              <tr>
+                <td>${c.ten}</td><td>${c.ngay}</td><td>${c.gioVao}</td><td>${c.gioRa}</td>
+                <td>${c.gioOT}</td><td>${c.loaiCong}</td><td>${c.ghiChu}</td>
+                <td><button class="delete-btn" onclick="xoaChamCong(${idx})">${t.delete}</button></td>
+              </tr>
+            `).join('')
+          }
+          </table>
+        `;
+      }
+
+      function thongKeCong(nvName, month) {
+        let ngayCong = 0, gioOT = 0;
+        chamCongList.forEach(c => {
+          if (c.ten === nvName && c.ngay.startsWith(month)) {
+            if (c.loaiCong === "Bình thường" || c.loaiCong === "Lễ")
+              ngayCong ++;
+            gioOT += Number(c.gioOT) || 0;
+          }
+        });
+        return {ngayCong, gioOT};
+      }
+
+      if (page === 'bangluong') {
+        const now = new Date();
+        const defaultMonth = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+        let selectedMonth = localStorage.getItem("payrollMonth") || defaultMonth;
+        let monthsOption = '';
+        for (let i=0; i<12; i++) {
+          let d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+          let m = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+          monthsOption += `<option value="${m}" ${m===selectedMonth?'selected':''}>${m}</option>`;
+        }
+
+        let trList = nhanVienList.map(nv => {
+          let {ngayCong, gioOT} = thongKeCong(nv.ten, selectedMonth);
+          let pc = phuCapList.find(x => x.ten === nv.ten && x.thang === selectedMonth) || {};
+          let phuCap = pc.phuCap || 0;
+          let thuong = pc.thuong || 0;
+          let tru = pc.tru || 0;
+          let luongNgay = nv.luongCoBan / 26;
+          let luongThucNhan = Math.round(luongNgay * ngayCong + gioOT*30000 + Number(phuCap) + Number(thuong) - Number(tru));
+          return `
+            <tr>
+              <td>${nv.ten}</td>
+              <td>${nv.luongCoBan.toLocaleString()}</td>
+              <td>${ngayCong}</td>
+              <td>${gioOT}</td>
+              <td><input type="number" min=0 style="width:70px" value="${phuCap}" onchange="nhapPhuCap('${nv.ten}','${selectedMonth}', this.value, null, null)"></td>
+              <td><input type="number" min=0 style="width:70px" value="${thuong}" onchange="nhapPhuCap('${nv.ten}','${selectedMonth}', null, this.value, null)"></td>
+              <td><input type="number" min=0 style="width:70px" value="${tru}" onchange="nhapPhuCap('${nv.ten}','${selectedMonth}', null, null, this.value)"></td>
+              <td>${luongThucNhan.toLocaleString()}</td>
+            </tr>
+          `;
+        }).join('');
+        content.innerHTML = `
+          <h2>${t.bangluong}</h2>
+          <label for="payrollMonth">Chọn tháng:</label>
+          <select id="payrollMonth" onchange="chonThangLuong()">${monthsOption}</select>
+          <table>
+            <tr>
+              <th>${t.name}</th>
+              <th>${t.salary}</th>
+              <th>Ngày công</th>
+              <th>OT</th>
+              <th>Phụ cấp</th>
+              <th>Thưởng</th>
+              <th>Trừ khác</th>
+              <th>Lương thực nhận</th>
+            </tr>
+            ${trList}
+          </table>
+        `;
+      }
+
+      if (page === 'settings') {
+        content.innerHTML = `
+          <h3>${t.menuSettings}</h3>
+          <p>${t.settingsText}</p>
+          <select id="languageSelect" onchange="changeLanguage()">
+            <option value="vi" ${lang==='vi'?'selected':''}>Tiếng Việt</option>
+            <option value="en" ${lang==='en'?'selected':''}>English</option>
+          </select>
+        `;
+      }
+    }
+
+    function changeLanguage() {
+      lang = document.getElementById("languageSelect").value;
+      localStorage.setItem("lang", lang);
+      showPage('settings');
+    }
+
+    function themNhanVien() {
+      const t = translations[lang];
+      const ten = document.getElementById("tenNV").value;
+      const chucVu = document.getElementById("chucVu").value;
+      const luongCoBan = document.getElementById("luong").value;
+      if (!ten || !chucVu || !luongCoBan) return alert(t.enterInfo);
+      nhanVienList.push({ten, chucVu, luongCoBan: Number(luongCoBan)});
+      localStorage.setItem("nhanVienList", JSON.stringify(nhanVienList));
+      showPage('nhansu');
+    }
+
+    function xoaNhanVien(idx) {
+      deletedNhanVienList.push(nhanVienList[idx]);
+      localStorage.setItem("deletedNhanVienList", JSON.stringify(deletedNhanVienList));
+      nhanVienList.splice(idx,1);
+      localStorage.setItem("nhanVienList", JSON.stringify(nhanVienList));
+      showPage('nhansu');
+    }
+
+    function khoiPhucNhanVien(idx) {
+      nhanVienList.push(deletedNhanVienList[idx]);
+      localStorage.setItem("nhanVienList", JSON.stringify(nhanVienList));
+      deletedNhanVienList.splice(idx,1);
+      localStorage.setItem("deletedNhanVienList", JSON.stringify(deletedNhanVienList));
+      showPage('nhansu');
+    }
+    function toggleShowDeletedNhanVien() {
+      window.showDeletedNhanVien = !window.showDeletedNhanVien;
+      showPage('nhansu');
+    }
+    window.toggleShowDeletedNhanVien = toggleShowDeletedNhanVien;
+    // XÓA CHẤM CÔNG
+    function xoaChamCong(idx) {
+      if(confirm('Bạn có chắc muốn xoá dòng chấm công này?')) {
+        chamCongList.splice(idx,1);
+        localStorage.setItem("chamCongList", JSON.stringify(chamCongList));
+        showPage('chamcong');
+      }
+    }
+    window.xoaChamCong = xoaChamCong;
+
+    function luuChamCong() {
+      const t = translations[lang];
+      const ten = document.getElementById("tenNVCC").value;
+      const ngay = document.getElementById("ngay").value;
+      const gioVao = document.getElementById("gioVao").value;
+      const gioRa = document.getElementById("gioRa").value;
+      const gioOT = document.getElementById("gioOT").value;
+      const loaiCong = document.getElementById("loaiCong").value;
+      const ghiChu = document.getElementById("ghiChu").value;
+      if (!ten || !ngay) return alert(t.enterInfo);
+      chamCongList.push({ten, ngay, gioVao, gioRa, gioOT:Number(gioOT), loaiCong, ghiChu});
+      localStorage.setItem("chamCongList", JSON.stringify(chamCongList));
+      showPage('chamcong');
+    }
+
+    window.nhapPhuCap = function(ten, thang, newPhuCap, newThuong, newTru) {
+      let d = phuCapList.find(x => x.ten===ten && x.thang===thang);
+      if (!d) {
+        d = {ten, thang, phuCap: 0, thuong: 0, tru: 0};
+        phuCapList.push(d);
+      }
+      if (newPhuCap !== null) d.phuCap = Number(newPhuCap);
+      if (newThuong !== null) d.thuong = Number(newThuong);
+      if (newTru !== null) d.tru = Number(newTru);
+      localStorage.setItem("phuCapList", JSON.stringify(phuCapList));
+      showPage('bangluong');
+    }
+
+    window.chonThangLuong = function() {
+      let m = document.getElementById("payrollMonth").value;
+      localStorage.setItem("payrollMonth", m);
+      showPage('bangluong');
+    }
+
+    window.xoaNhanVien = xoaNhanVien;
+    window.khoiPhucNhanVien = khoiPhucNhanVien;
+
+    showPage('dashboard');
+  </script>
+</body>
+</html>
